@@ -122,27 +122,35 @@ with col2:
 
     start_debt_input = st.text_input("💰 Başlangıç Borcu", value=start_debt_default, placeholder="0")
 
-    if st.button("💾 Kaydet"):
-        try:
-            start_debt_value = float(start_debt_input)
-        except ValueError:
-            st.error("❗ Lütfen geçerli bir sayısal başlangıç borcu girin.")
-        else:
-            if not name or not number:
-                st.warning("❌ Lütfen müşteri ismi ve telefon numarasını girin.")
-            elif not st.session_state.selected_products:
-                st.warning("❌ En az bir ürün eklemelisiniz.")
+    footercol1, footercol2 = st.columns([1, 1])
+    with footercol1:
+        if st.button("💾 Kaydet"):
+            try:
+                start_debt_value = float(start_debt_input)
+            except ValueError:
+                st.error("❗ Lütfen geçerli bir sayısal başlangıç borcu girin.")
             else:
-                products_text = ", ".join([p['name'] for p in st.session_state.selected_products])
-                success = db.insert_acik_hesap(name, number, products_text, start_debt_value, remaining_price=start_debt_value)
-                if success:
-                    for product in st.session_state.selected_products:
-                        db.reduce_stock_quantity_by_barcode(product['barcode'], 1)
-                    st.session_state.barcodes_list = []
-                    st.session_state.selected_products = []
-                    st.session_state.total_price = 0.0
-                    st.session_state.discount_percent = 0.0
-                    st.success("✅ Açık hesap başarıyla eklendi ve stoklar güncellendi!")
-                    st.rerun()
+                if not name or not number:
+                    st.warning("❌ Lütfen müşteri ismi ve telefon numarasını girin.")
+                elif not st.session_state.selected_products:
+                    st.warning("❌ En az bir ürün eklemelisiniz.")
                 else:
-                    st.error("❌ Kayıt sırasında bir hata oluştu.")
+                    products_text = ", ".join([p['name'] for p in st.session_state.selected_products])
+                    success = db.insert_acik_hesap(name, number, products_text, start_debt_value, remaining_price=start_debt_value)
+                    if success:
+                        for product in st.session_state.selected_products:
+                            db.reduce_stock_quantity_by_barcode(product['barcode'], 1)
+                        st.session_state.barcodes_list = []
+                        st.session_state.selected_products = []
+                        st.session_state.total_price = 0.0
+                        st.session_state.discount_percent = 0.0
+                        st.success("✅ Açık hesap başarıyla eklendi ve stoklar güncellendi!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Kayıt sırasında bir hata oluştu.")
+    with footercol2:
+        if st.button("🔄 Sıfırla"):
+            for key in ["products", "discount_percent", "input_name", "input_price"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()

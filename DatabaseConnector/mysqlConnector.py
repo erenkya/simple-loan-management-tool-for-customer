@@ -99,3 +99,63 @@ def get_all_acik_hesap():
         return None
     finally:
         connection.close()
+#--------------------------------------------------------------------------------------------------------------------------------------
+def pay_acik_hesap(hesap_id, payment_amount, payment_type):
+    connection = connect_to_database()
+    if connection is None:
+        return False
+
+    try:
+        with connection.cursor() as cursor:
+            # Önce mevcut remaining_price ve start_price alınır
+            cursor.execute("SELECT remaining_price, start_price FROM acik_hesap WHERE id = %s", (hesap_id,))
+            hesap = cursor.fetchone()
+            if not hesap:
+                st.warning("Hesap bulunamadı.")
+                return False
+
+            remaining_price = hesap["remaining_price"]
+            start_price = hesap["start_price"]
+
+            if payment_amount > remaining_price:
+                st.warning("🧾 Ödeme tutarı kalan borçtan fazla olamaz.")
+                return False
+
+            new_remaining = remaining_price - payment_amount
+
+            # Güncelleme ve ödeme kaydı
+            cursor.execute("UPDATE acik_hesap SET remaining_price = %s WHERE id = %s", (new_remaining, hesap_id))
+            cursor.execute("""
+                INSERT INTO acik_hesap_odeme (hesap_id, payment, payment_type, start_price, remaining_price)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (hesap_id, payment_amount, payment_type, start_price, new_remaining))
+
+            connection.commit()
+            st.success("💸 Ödeme başarıyla kaydedildi.")
+            return True
+    except pymysql.MySQLError as e:
+        st.error(f"💥 Ödeme yapılırken hata oluştu: {e}")
+        return False
+    finally:
+        connection.close()
+
+def delete_acik_hesap(hesap_id):
+    connection = connect_to_database()
+    if connection is None:
+        return False
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM acik_hesap WHERE id = %s", (hesap_id,))
+            connection.commit()
+            st.success("🗑️ Açık hesap silindi.")
+            return True
+    except pymysql.MySQLError as e:
+        st.error(f"❌ Silme işlemi sırasında hata oluştu: {e}")
+        return False
+    finally:
+        connection.close()
+
+
+
+
