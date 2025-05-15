@@ -157,5 +157,24 @@ def delete_acik_hesap(hesap_id):
         connection.close()
 
 
+def get_all_acik_hesap_odemeleri():
+    connection = connect_to_database()
+    if connection is None:
+        return []
 
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT o.hesap_id, o.payment, o.payment_type, o.created_at,  
+                       h.name AS customer_name, h.number AS customer_number
+                FROM acik_hesap_odeme o
+                JOIN acik_hesap h ON o.hesap_id = h.id
+                ORDER BY o.created_at DESC
+            """)
+            return cursor.fetchall()
+    except pymysql.MySQLError as e:
+        st.error(f"📥 Ödeme verileri alınırken hata oluştu: {e}")
+        return []
+    finally:
+        connection.close()
 

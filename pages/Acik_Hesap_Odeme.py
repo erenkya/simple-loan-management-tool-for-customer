@@ -5,10 +5,18 @@ st.set_page_config(page_title="Açık Hesap Ödeme", page_icon="💸", layout="w
 st.title("💼 Açık Hesaplar")
 st.write("Açık hesaplara borç ödeme yapabilir veya hesabı silebilirsiniz.")
 
+# Tüm açık hesapları al
 acik_hesaplar = get_all_acik_hesap()
 
+# 🔍 Filtreleme
+filter_text = st.text_input("🔍 İsimle Filtrele", placeholder="Müşteri adı girin...").strip().lower()
+
+if filter_text:
+    acik_hesaplar = [h for h in acik_hesaplar if filter_text in h['name'].lower()]
+
+# Listeleme
 if not acik_hesaplar:
-    st.info("🔎 Henüz açık hesap yok.")
+    st.info("🔎 Eşleşen açık hesap bulunamadı.")
 else:
     for hesap in acik_hesaplar:
         with st.container():
