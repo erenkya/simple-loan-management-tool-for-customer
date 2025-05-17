@@ -5,7 +5,7 @@ config = {
     'host': 'localhost',
     'port': 3306,
     'user': 'root',
-    'password': 'E1r2e3n4',
+    'password': 'root',
     'database': 'StockManagement',
     'cursorclass': pymysql.cursors.DictCursor
 }
