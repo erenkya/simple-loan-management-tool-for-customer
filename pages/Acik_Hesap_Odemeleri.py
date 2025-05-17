@@ -9,26 +9,33 @@ from DatabaseConnector.mysqlConnector import get_all_acik_hesap_odemeleri
 st.set_page_config(page_title="Açık Hesap Ödeme Geçmişi", page_icon="📜", layout="wide")
 st.title("📜 Açık Hesap Ödeme Geçmişi")
 
+# Veritabanından ödemeleri çek
 odemeler = get_all_acik_hesap_odemeleri()
 
 if not odemeler:
     st.info("🔎 Henüz ödeme kaydı yok.")
 else:
+    # DataFrame oluştur
     df = pd.DataFrame(odemeler)
+
+    # Beklenen kolonlar:
+    # 'customer_name', 'hesap_id', 'customer_number', 'payment', 'payment_type', 'created_at', 'kur'
+
+    # Ödeme Tutarı kur bilgisiyle çarpılarak gösterilir
+    df["Ödeme Tutarı (₺)"] = df["payment"] * df["kur"]
+
+    # Kolon adlarını düzenle
     df.rename(columns={
-    "customer_name": "Müşteri Adı",
-    "hesap_id": "Hesap ID",
-    "customer_number": "Telefon",
-    "payment": "Ödeme Tutarı",
-    "payment_type": "Ödeme Türü",
-    "created_at": "Tarih"
-	}, inplace=True)
+        "customer_name": "Müşteri Adı",
+        "hesap_id": "Hesap ID",
+        "customer_number": "Telefon",
+        "payment_type": "Ödeme Türü",
+        "created_at": "Tarih",
+        "kur": "Kur",
+    }, inplace=True)
 
-	# Sütunları istediğin sıraya göre yeniden düzenle
-    df = df[["Müşteri Adı", "Telefon", "Hesap ID", "Ödeme Tutarı", "Ödeme Türü", "Tarih"]]
-
-	
-
+    # Sütun sıralaması
+    df = df[["Müşteri Adı", "Telefon", "Hesap ID", "Kur", "Ödeme Tutarı (₺)", "Ödeme Türü", "Tarih"]]
 
     # Filtreleme
     customer_filter = st.text_input("Müşteri Adı veya Telefon ile ara:")
@@ -38,18 +45,18 @@ else:
             df["Telefon"].str.contains(customer_filter, case=False, na=False)
         ]
 
-    st.dataframe(df, use_container_width=True)
-
-    # Tarihi datetime yap
+    # Tarihi datetime'a çevir
     df["Tarih"] = pd.to_datetime(df["Tarih"], errors='coerce')
 
-    # Excel dosyasını oluştur
+    # Görüntüleme
+    st.dataframe(df, use_container_width=True)
+
+    # Excel çıktısı için hazırlık
     excel_buffer = io.BytesIO()
     with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Ödemeler')
-        # writer.save()  # BU satır kaldırıldı
 
-    # openpyxl ile yükle
+    # Excel dosyasını stil vermek için tekrar aç
     excel_buffer.seek(0)
     wb = load_workbook(excel_buffer)
     ws = wb.active
@@ -57,15 +64,13 @@ else:
     # Tarih formatı oluştur
     date_style = NamedStyle(name="datetime", number_format='YYYY-MM-DD HH:MM:SS')
 
-    # Tarih sütunu indeksi (1-based)
     tarih_col_idx = df.columns.get_loc("Tarih") + 1
 
-    # Başlıktan sonraki satırlara tarih formatını uygula
     for row in range(2, ws.max_row + 1):
         cell = ws.cell(row=row, column=tarih_col_idx)
         cell.style = date_style
 
-    # Tekrar buffer'a yaz
+    # Son halini kaydet
     output_buffer = io.BytesIO()
     wb.save(output_buffer)
     output_buffer.seek(0)
@@ -74,6 +79,6 @@ else:
     st.download_button(
         label="📩 Excel Olarak İndir",
         data=output_buffer,
-        file_name="ödemeler.xlsx",
+        file_name="odeme_gecmisi.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

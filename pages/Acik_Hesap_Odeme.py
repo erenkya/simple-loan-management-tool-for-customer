@@ -5,6 +5,16 @@ st.set_page_config(page_title="Açık Hesap Ödeme", page_icon="💸", layout="w
 st.title("💼 Açık Hesaplar")
 st.write("Açık hesaplara borç ödeme yapabilir veya hesabı silebilirsiniz.")
 
+def para_birimi_simgesi(currency_code):
+    if currency_code == "USD":
+        return "$"
+    elif currency_code == "EUR":
+        return "€"
+    elif currency_code in ("TRY", "TL"):
+        return "₺"
+    else:
+        return ""
+
 # Tüm açık hesapları al
 acik_hesaplar = get_all_acik_hesap()
 
@@ -20,11 +30,14 @@ if not acik_hesaplar:
 else:
     for hesap in acik_hesaplar:
         with st.container():
+            birim_simgesi = para_birimi_simgesi(hesap.get('kur'))
+            
             st.subheader(f"👤 {hesap['name']} - {hesap['number']}")
             st.markdown(f"""
             - 📦 Ürünler: `{hesap['products']}`
-            - 💰 Başlangıç Tutarı: `{hesap['start_price']} ₺`
-            - 🔻 Kalan Borç: `{hesap['remaining_price']} ₺`
+            - 💰 Başlangıç Tutarı: `{hesap['start_price']} {birim_simgesi}`
+            - 🔻 Kalan Borç: `{hesap['remaining_price']} {birim_simgesi}`
+            - 💱 Kur: `{hesap['kur']}`
             - 🕒 Oluşturulma: `{hesap['created_at']}`
             """)
 
@@ -35,7 +48,7 @@ else:
             else:
                 with col1:
                     payment = st.number_input(
-                        "💵 Ödeme Tutarı", 
+                        f"💵 Ödeme Tutarı ({birim_simgesi})", 
                         min_value=1, 
                         max_value=hesap['remaining_price'], 
                         step=1, 
@@ -51,7 +64,7 @@ else:
                     if st.button("✅ Ödeme Yap", key=f"pay_button_{hesap['id']}"):
                         success = pay_acik_hesap(hesap['id'], payment, payment_type)
                         if success:
-                            st.success("💰 Ödeme başarıyla yapıldı.")
+                            st.success(f"💰 {payment} {birim_simgesi} ödeme başarıyla yapıldı.")
                             st.rerun()
 
             if st.button("🗑️ Hesabı Sil", key=f"delete_button_{hesap['id']}"):

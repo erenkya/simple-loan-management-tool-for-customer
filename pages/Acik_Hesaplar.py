@@ -13,16 +13,22 @@ acik_hesaplar = db.get_all_acik_hesap()
 
 if acik_hesaplar:
     # Verileri DataFrame'e çevir
-    df = pd.DataFrame(acik_hesaplar, columns=['id', 'name', 'number', 'products', 'start_price', 'remaining_price', 'created_at'])
+    df = pd.DataFrame(acik_hesaplar, columns=[
+        'id', 'name', 'number', 'products',
+        'start_price', 'remaining_price', 'kur', 'created_at'
+    ])
     
     # Kolon adlarını Türkçeye çevir
-    df.columns = ['ID', 'Müşteri Adı', 'Telefon Numarası', 'Ürünler', 'Başlangıç Fiyatı', 'Kalan Ücret', 'Oluşturulma Tarihi']
+    df.columns = [
+        'ID', 'Müşteri Adı', 'Telefon Numarası', 'Ürünler',
+        'Başlangıç Fiyatı', 'Kalan Ücret', 'Kur', 'Oluşturulma Tarihi'
+    ]
     
     # Tarih formatını düzenle
     df['Oluşturulma Tarihi'] = pd.to_datetime(df['Oluşturulma Tarihi']).dt.strftime('%d-%m-%Y')
 
     # Filtreleme seçenekleri
-    filter_option = st.selectbox("Filtreleme Seçeneği", ["Hepsi", "İsim", "Numara", "Tarih"])
+    filter_option = st.selectbox("Filtreleme Seçeneği", ["Hepsi", "İsim", "Numara", "Tarih", "Kur"])
 
     if filter_option == "İsim":
         name_filter = st.text_input("Müşteri İsmi ile Filtrele")
@@ -43,15 +49,23 @@ if acik_hesaplar:
         if len(date_filter) == 2:  # Başlangıç ve bitiş tarihi seçilmişse
             start_date = pd.to_datetime(date_filter[0])
             end_date = pd.to_datetime(date_filter[1])
-            df = df[(df['Oluşturulma Tarihi'] >= start_date.strftime('%d-%m-%Y')) & (df['Oluşturulma Tarihi'] <= end_date.strftime('%d-%m-%Y'))]
+            date_column = pd.to_datetime(df['Oluşturulma Tarihi'], format='%d-%m-%Y')
+            df = df[(date_column >= start_date) & (date_column <= end_date)]
             if df.empty:
                 st.warning("Bu tarihler arasında kayıt bulunmamaktadır.")
-    
+
+    elif filter_option == "Kur":
+        currency_options = df['Kur'].dropna().unique().tolist()
+        selected_currency = st.selectbox("Kur Seçiniz", ["Hepsi"] + sorted(currency_options))
+        if selected_currency != "Hepsi":
+            df = df[df['Kur'] == selected_currency]
+            if df.empty:
+                st.warning("Bu kura ait kayıt bulunmamaktadır.")
+
     # Görüntüleme
     st.dataframe(df, use_container_width=True)
 
     # Excel İndirme
-    # Excel dosyasını bellekte tutmak için io.BytesIO kullanıyoruz
     excel_buffer = io.BytesIO()
     df.to_excel(excel_buffer, index=False, engine='openpyxl')
     excel_buffer.seek(0)

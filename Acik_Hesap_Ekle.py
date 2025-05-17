@@ -21,6 +21,10 @@ with col2:
     name = st.text_input("👤 Müşteri İsmi", placeholder="Örn: Ahmet Yılmaz (Zorunlu)")
     number = st.text_input("📞 Telefon Numarası", placeholder="Örn: 0555 123 4567 (Zorunlu)")
 
+    # 💱 Para birimi seçimi
+    kur_options = ["TRY", "USD", "EUR"]
+    selected_kur = st.selectbox("💱 Para Birimi", kur_options, index=0)
+
     def add_barcode(barcode_input):
         if barcode_input.strip():
             st.session_state.barcodes_list.append(barcode_input.strip())
@@ -67,7 +71,6 @@ with col2:
                 else:
                     st.warning(f"❗ Barkod ile ürün bulunamadı: {barcode}")
 
-    # İndirim yüzdesi inputu
     discount_percent_str = st.text_input("🤑 İndirim Yüzdesi (%)", value=str(st.session_state.discount_percent), help="0 ile 100 arasında bir sayı girin")
     try:
         discount_percent = float(discount_percent_str)
@@ -104,7 +107,7 @@ with col2:
         for display_str in product_display_list:
             if display_str not in updated_selection:
                 bc_start = display_str.find("Barkod: ") + len("Barkod: ")
-                bc = display_str[bc_start:bc_start+13]  # Barkod uzunluğuna göre kes (örn 13 karakter)
+                bc = display_str[bc_start:bc_start+13]
                 removed_barcodes.append(bc)
 
         if removed_barcodes:
@@ -132,11 +135,17 @@ with col2:
             else:
                 if not name or not number:
                     st.warning("❌ Lütfen müşteri ismi ve telefon numarasını girin.")
-                elif not st.session_state.selected_products:
-                    st.warning("❌ En az bir ürün eklemelisiniz.")
+                
                 else:
                     products_text = ", ".join([p['name'] for p in st.session_state.selected_products])
-                    success = db.insert_acik_hesap(name, number, products_text, start_debt_value, remaining_price=start_debt_value)
+                    success = db.insert_acik_hesap(
+                        name,
+                        number,
+                        products_text,
+                        start_debt_value,
+                        remaining_price=start_debt_value,
+                        kur=selected_kur  # 🆕 Para birimi ekleme
+                    )
                     if success:
                         for product in st.session_state.selected_products:
                             db.reduce_stock_quantity_by_barcode(product['barcode'], 1)

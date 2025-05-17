@@ -18,28 +18,23 @@ def connect_to_database():
         st.error(f"🔌 Veritabanına bağlanırken hata oluştu: {e}")
         return None
 
-
-def insert_acik_hesap(name, number, products, start_price, remaining_price):
-    connection = connect_to_database()
-    if connection is None:
-        return False
-
+def insert_acik_hesap(name, number, products, start_price, remaining_price, kur="TRY"):
+    conn = connect_to_database()
+    cursor = conn.cursor()
     try:
-        with connection.cursor() as cursor:
-            sql = """
-            INSERT INTO acik_hesap (name, number, products, start_price, remaining_price)
-            VALUES (%s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql, (name, number, products, start_price, remaining_price))
-            connection.commit()
-            st.success("✅ Açık hesap başarıyla eklendi.")
-            return True
-    except pymysql.MySQLError as e:
-        st.error(f"🧨 Kayıt eklenirken hata oluştu: {e}")
+        sql = """
+            INSERT INTO acik_hesap (name, number, products, start_price, remaining_price, kur)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql, (name, number, products, start_price, remaining_price, kur))
+        conn.commit()
+        return True
+    except Exception as e:
+        print("DB Error:", e)
         return False
     finally:
-        connection.close()
-
+        cursor.close()
+        conn.close()
 def get_product_name_and_price_by_barcode(barcode):
     connection = connect_to_database()
     if connection is None:
@@ -47,7 +42,7 @@ def get_product_name_and_price_by_barcode(barcode):
 
     try:
         with connection.cursor() as cursor:
-            sql = "SELECT name, price, stock_quantity FROM products WHERE barcode = %s"
+            sql = "SELECT name, price, stock_quantity  FROM products WHERE barcode = %s"
             cursor.execute(sql, (barcode,))
             result = cursor.fetchone()
             return result
@@ -90,7 +85,7 @@ def get_all_acik_hesap():
 
     try:
         with connection.cursor() as cursor:
-            sql = "SELECT id, name, number, products, start_price, remaining_price, created_at FROM acik_hesap"
+            sql = "SELECT id, name, number, products, start_price, remaining_price, kur, created_at FROM acik_hesap"
             cursor.execute(sql)
             result = cursor.fetchall()  # Tüm kayıtları al
             return result
@@ -108,7 +103,7 @@ def pay_acik_hesap(hesap_id, payment_amount, payment_type):
     try:
         with connection.cursor() as cursor:
             # Önce mevcut remaining_price ve start_price alınır
-            cursor.execute("SELECT remaining_price, start_price FROM acik_hesap WHERE id = %s", (hesap_id,))
+            cursor.execute("SELECT remaining_price, start_price, kur FROM acik_hesap WHERE id = %s", (hesap_id,))
             hesap = cursor.fetchone()
             if not hesap:
                 st.warning("Hesap bulunamadı.")
@@ -126,9 +121,9 @@ def pay_acik_hesap(hesap_id, payment_amount, payment_type):
             # Güncelleme ve ödeme kaydı
             cursor.execute("UPDATE acik_hesap SET remaining_price = %s WHERE id = %s", (new_remaining, hesap_id))
             cursor.execute("""
-                INSERT INTO acik_hesap_odeme (hesap_id, payment, payment_type, start_price, remaining_price)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (hesap_id, payment_amount, payment_type, start_price, new_remaining))
+                INSERT INTO acik_hesap_odeme (hesap_id, payment, payment_type, start_price, remaining_price, kur)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (hesap_id, payment_amount, payment_type, start_price, new_remaining, hesap['kur']))
 
             connection.commit()
             st.success("💸 Ödeme başarıyla kaydedildi.")
@@ -165,7 +160,7 @@ def get_all_acik_hesap_odemeleri():
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT o.hesap_id, o.payment, o.payment_type, o.created_at,  
+                SELECT o.hesap_id, o.payment, o.kur ,o.payment_type, o.created_at,  
                        h.name AS customer_name, h.number AS customer_number
                 FROM acik_hesap_odeme o
                 JOIN acik_hesap h ON o.hesap_id = h.id
