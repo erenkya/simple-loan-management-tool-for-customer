@@ -1,5 +1,8 @@
 import pymysql
 import streamlit as st
+import json
+from collections import Counter
+from datetime import datetime
 
 config = {
     'host': 'localhost',
@@ -173,3 +176,44 @@ def get_all_acik_hesap_odemeleri():
     finally:
         connection.close()
 
+
+def insert_sales_from_acik_hesap_products(products_json_string, type_of_sale="Açık Hesap", user_id=1):
+    connection = connect_to_database()
+    if connection is None:
+        return False
+
+    try:
+        products = json.loads(products_json_string)  # JSON string'i listeye çeviriyoruz
+
+        with connection.cursor() as cursor:
+            for product in products:
+                barcode = product["barcode"]
+                quantity = product["quantity"]
+                price = product["price"]
+                gain = product.get("gain", 0.0)
+
+                # Önce barcode'dan product_id alalım
+                cursor.execute("SELECT product_id FROM products WHERE barcode = %s", (barcode,))
+                result = cursor.fetchone()
+
+                if not result:
+                    st.warning(f"🚫 Barkod bulunamadı: {barcode}")
+                    continue
+
+                product_id = result["product_id"]
+                total_price = quantity * price
+
+                # sales tablosuna insert
+                cursor.execute("""
+                    INSERT INTO sales (product_id, quantity, total_price, gain, type_of_sale, user_id, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'COMPLETED')
+                """, (product_id, quantity, total_price, gain, type_of_sale, user_id))
+
+        connection.commit()
+        st.success("📦 Tüm ürünler için satış kayıtları eklendi.")
+        return True
+    except Exception as e:
+        st.error(f"💥 Satış kayıtları eklenirken hata oluştu: {e}")
+        return False
+    finally:
+        connection.close()

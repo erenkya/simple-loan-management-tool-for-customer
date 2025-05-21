@@ -1,9 +1,15 @@
 import streamlit as st
+import json
 import DatabaseConnector.mysqlConnector as db
-from collections import Counter
 
-st.set_page_config(page_title="Açık Hesap Yönetim Sistemi", page_icon=":guardsman:", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Açık Hesap Yönetim Sistemi",
+    page_icon=":guardsman:",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# State initialization
 if "barcodes_list" not in st.session_state:
     st.session_state.barcodes_list = []
 if "selected_products" not in st.session_state:
@@ -11,8 +17,8 @@ if "selected_products" not in st.session_state:
 if "discount_percent" not in st.session_state:
     st.session_state.discount_percent = 0.0
 
+# Layout
 col1, col2, col3 = st.columns([1, 2, 1])
-
 with col2:
     st.title("➕ Açık Hesap Ekle")
 
@@ -22,6 +28,7 @@ with col2:
     kur_options = ["TRY", "USD", "EUR"]
     selected_kur = st.selectbox("💱 Para Birimi", kur_options, index=0)
 
+    # Barkod ekleme
     def add_barcode(barcode_input):
         if barcode_input.strip():
             product = db.get_product_name_and_price_by_barcode(barcode_input.strip())
@@ -45,7 +52,6 @@ with col2:
             add_barcode(barcode_input)
 
     st.write("📋 Eklenen Ürünler:")
-
     total_price = 0.0
     updated_products = []
 
@@ -64,6 +70,7 @@ with col2:
                 del st.session_state.barcodes_list[i]
                 del st.session_state.selected_products[i]
                 st.rerun()
+
         updated_products.append(product)
         total_price += product["price"]
 
@@ -74,6 +81,7 @@ with col2:
         st.session_state.selected_products = []
         st.rerun()
 
+    # İndirim yüzdesi
     discount_percent_str = st.text_input("🤑 İndirim Yüzdesi (%)", value=str(st.session_state.discount_percent), help="0 ile 100 arasında bir sayı girin")
     try:
         discount_percent = float(discount_percent_str)
@@ -90,6 +98,7 @@ with col2:
 
     start_debt_input = st.text_input("💰 Başlangıç Borcu", value=f"{discounted_total:.2f}", placeholder="0")
 
+    # Alt Butonlar
     footercol1, footercol2 = st.columns([1, 1])
     with footercol1:
         if st.session_state.selected_products:
@@ -111,13 +120,32 @@ with col2:
                             remaining_price=start_debt_value,
                             kur=selected_kur
                         )
+
                         if success:
+                            # 1. Stokları düş
                             for product in st.session_state.selected_products:
                                 db.reduce_stock_quantity_by_barcode(product['barcode'], 1)
+
+                            # 2. JSON formatına uygun hale getir
+                            products_for_sale = []
+                            for product in st.session_state.selected_products:
+                                products_for_sale.append({
+                                    "barcode": product["barcode"],
+                                    "quantity": 1,
+                                    "price": product["price"],
+                                    "gain": 0.0
+                                })
+
+                            # 3. JSON string olarak kaydet
+                            json_string = json.dumps(products_for_sale)
+                            db.insert_sales_from_acik_hesap_products(json_string, type_of_sale="Açık Hesap", user_id=1)
+
+                            # 4. Temizle
                             st.session_state.barcodes_list = []
                             st.session_state.selected_products = []
                             st.session_state.discount_percent = 0.0
-                            st.success("✅ Açık hesap başarıyla eklendi ve stoklar güncellendi!")
+
+                            st.success("✅ Açık hesap başarıyla eklendi, stoklar düşüldü ve satışlar kaydedildi!")
                             st.rerun()
                         else:
                             st.error("❌ Kayıt sırasında bir hata oluştu.")
