@@ -22,7 +22,7 @@ else:
     # 'customer_name', 'hesap_id', 'customer_number', 'payment', 'payment_type', 'created_at', 'kur'
 
     # Ödeme Tutarı kur bilgisiyle çarpılarak gösterilir
-    df["Ödeme Tutarı (₺)"] = df["payment"] * df["kur"]
+    df["Ödeme Tutarı (₺)"] = df["payment"] 
 
     # Kolon adlarını düzenle
     df.rename(columns={
