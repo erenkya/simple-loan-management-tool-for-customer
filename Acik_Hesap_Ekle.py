@@ -8,8 +8,6 @@ if "barcodes_list" not in st.session_state:
     st.session_state.barcodes_list = []
 if "selected_products" not in st.session_state:
     st.session_state.selected_products = []
-if "total_price" not in st.session_state:
-    st.session_state.total_price = 0.0
 if "discount_percent" not in st.session_state:
     st.session_state.discount_percent = 0.0
 
@@ -21,14 +19,22 @@ with col2:
     name = st.text_input("👤 Müşteri İsmi", placeholder="Örn: Ahmet Yılmaz (Zorunlu)")
     number = st.text_input("📞 Telefon Numarası", placeholder="Örn: 0555 123 4567 (Zorunlu)")
 
-    # 💱 Para birimi seçimi
     kur_options = ["TRY", "USD", "EUR"]
     selected_kur = st.selectbox("💱 Para Birimi", kur_options, index=0)
 
     def add_barcode(barcode_input):
         if barcode_input.strip():
-            st.session_state.barcodes_list.append(barcode_input.strip())
-            st.rerun()
+            product = db.get_product_name_and_price_by_barcode(barcode_input.strip())
+            if product:
+                st.session_state.barcodes_list.append(barcode_input.strip())
+                st.session_state.selected_products.append({
+                    "name": product["name"],
+                    "price": float(product["price"]),
+                    "barcode": barcode_input.strip()
+                })
+                st.rerun()
+            else:
+                st.warning(f"❗ Barkod ile ürün bulunamadı: {barcode_input}")
         else:
             st.warning("❗ Barkod alanı boş bırakılamaz.")
 
@@ -38,38 +44,35 @@ with col2:
         if submitted:
             add_barcode(barcode_input)
 
-    st.write("📋 Girilen Barkodlar:")
-    for i, bc in enumerate(st.session_state.barcodes_list):
-        col1_, col2_ = st.columns([8, 1])
+    st.write("📋 Eklenen Ürünler:")
+
+    total_price = 0.0
+    updated_products = []
+
+    for i, product in enumerate(st.session_state.selected_products):
+        col1_, col2_, col3_ = st.columns([5, 2, 1])
         with col1_:
-            st.write(f"{i+1}. {bc}")
+            st.write(f"{i+1}. {product['name']} (Barkod: {product['barcode']})")
         with col2_:
+            new_price = st.text_input(f"Fiyat ({product['name']})", value=f"{product['price']:.2f}", key=f"price_input_{i}")
+            try:
+                product["price"] = float(new_price)
+            except ValueError:
+                st.warning(f"{product['name']} için geçersiz fiyat girdiniz.")
+        with col3_:
             if st.button("❌", key=f"del_{i}"):
-                st.session_state.barcodes_list.pop(i)
+                del st.session_state.barcodes_list[i]
+                del st.session_state.selected_products[i]
                 st.rerun()
+        updated_products.append(product)
+        total_price += product["price"]
+
+    st.session_state.selected_products = updated_products
 
     if st.button("🧹 Tüm Barkodları Temizle"):
         st.session_state.barcodes_list = []
-        st.rerun()
-
-    if st.button("🔍 Ürünleri Ekle"):
         st.session_state.selected_products = []
-        st.session_state.total_price = 0.0
-
-        if not st.session_state.barcodes_list:
-            st.warning("❗ En az bir barkod eklemelisiniz.")
-        else:
-            for barcode in st.session_state.barcodes_list:
-                product = db.get_product_name_and_price_by_barcode(barcode)
-                if product:
-                    st.session_state.selected_products.append({
-                        "name": product['name'],
-                        "price": float(product['price']),
-                        "barcode": barcode
-                    })
-                    st.session_state.total_price += float(product['price'])
-                else:
-                    st.warning(f"❗ Barkod ile ürün bulunamadı: {barcode}")
+        st.rerun()
 
     discount_percent_str = st.text_input("🤑 İndirim Yüzdesi (%)", value=str(st.session_state.discount_percent), help="0 ile 100 arasında bir sayı girin")
     try:
@@ -82,48 +85,10 @@ with col2:
         discount_percent = 0.0
     st.session_state.discount_percent = discount_percent
 
-    if st.session_state.selected_products:
-        st.subheader("🧾 Eklenen Ürünler (Barkod tekrar sayısına göre):")
+    discounted_total = total_price * (1 - discount_percent / 100)
+    st.markdown(f"### 💵 Toplam Tutar: {total_price:.2f}₺ → İndirimli: {discounted_total:.2f}₺")
 
-        barcode_counts = Counter([p['barcode'] for p in st.session_state.selected_products])
-
-        product_display_list = []
-        total_price_after_discount = 0.0
-
-        for barcode, count in barcode_counts.items():
-            product = next(p for p in st.session_state.selected_products if p['barcode'] == barcode)
-            original_price = product['price']
-            discounted_price = original_price * (1 - discount_percent / 100)
-            total_line_price = discounted_price * count
-            total_price_after_discount += total_line_price
-            product_display_list.append(
-                f"{count} x {product['name']} (Barkod: {barcode}) - "
-                f"Fiyat: {original_price:.2f}₺, İndirimli: {discounted_price:.2f}₺"
-            )
-
-        updated_selection = st.multiselect("Ürünleri seçip çıkarabilirsiniz:", options=product_display_list, default=product_display_list)
-
-        removed_barcodes = []
-        for display_str in product_display_list:
-            if display_str not in updated_selection:
-                bc_start = display_str.find("Barkod: ") + len("Barkod: ")
-                bc = display_str[bc_start:bc_start+13]
-                removed_barcodes.append(bc)
-
-        if removed_barcodes:
-            new_selected_products = []
-            for p in st.session_state.selected_products:
-                if p['barcode'] not in removed_barcodes:
-                    new_selected_products.append(p)
-            st.session_state.selected_products = new_selected_products
-            st.session_state.total_price = sum(p['price'] for p in new_selected_products)
-            st.rerun()
-
-        start_debt_default = f"{total_price_after_discount:.2f}" if total_price_after_discount else "0"
-    else:
-        start_debt_default = "0"
-
-    start_debt_input = st.text_input("💰 Başlangıç Borcu", value=start_debt_default, placeholder="0")
+    start_debt_input = st.text_input("💰 Başlangıç Borcu", value=f"{discounted_total:.2f}", placeholder="0")
 
     footercol1, footercol2 = st.columns([1, 1])
     with footercol1:
@@ -135,7 +100,6 @@ with col2:
             else:
                 if not name or not number:
                     st.warning("❌ Lütfen müşteri ismi ve telefon numarasını girin.")
-                
                 else:
                     products_text = ", ".join([p['name'] for p in st.session_state.selected_products])
                     success = db.insert_acik_hesap(
@@ -144,14 +108,13 @@ with col2:
                         products_text,
                         start_debt_value,
                         remaining_price=start_debt_value,
-                        kur=selected_kur  # 🆕 Para birimi ekleme
+                        kur=selected_kur
                     )
                     if success:
                         for product in st.session_state.selected_products:
                             db.reduce_stock_quantity_by_barcode(product['barcode'], 1)
                         st.session_state.barcodes_list = []
                         st.session_state.selected_products = []
-                        st.session_state.total_price = 0.0
                         st.session_state.discount_percent = 0.0
                         st.success("✅ Açık hesap başarıyla eklendi ve stoklar güncellendi!")
                         st.rerun()
@@ -159,7 +122,7 @@ with col2:
                         st.error("❌ Kayıt sırasında bir hata oluştu.")
     with footercol2:
         if st.button("🔄 Sıfırla"):
-            for key in ["products", "discount_percent", "input_name", "input_price"]:
-                if key in st.session_state:
-                    del st.session_state[key]
+            st.session_state.barcodes_list = []
+            st.session_state.selected_products = []
+            st.session_state.discount_percent = 0.0
             st.rerun()
