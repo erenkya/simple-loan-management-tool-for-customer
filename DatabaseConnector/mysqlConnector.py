@@ -217,3 +217,37 @@ def insert_sales_from_acik_hesap_products(products_json_string, type_of_sale="A�
         return False
     finally:
         connection.close()
+
+def increase_acik_hesap_borc(hesap_id, ek_tutar):
+    connection = connect_to_database()
+    if connection is None:
+        return False
+
+    try:
+        with connection.cursor() as cursor:
+            # Mevcut değerleri al
+            cursor.execute("SELECT remaining_price, start_price FROM acik_hesap WHERE id = %s", (hesap_id,))
+            hesap = cursor.fetchone()
+
+            if not hesap:
+                st.warning("❌ Hesap bulunamadı.")
+                return False
+
+            new_remaining = hesap["remaining_price"] + ek_tutar
+            new_start = hesap["start_price"] + ek_tutar
+
+            # Güncelle
+            cursor.execute("""
+                UPDATE acik_hesap 
+                SET remaining_price = %s, start_price = %s 
+                WHERE id = %s
+            """, (new_remaining, new_start, hesap_id))
+
+            connection.commit()
+            st.success("📈 Borç başarılı şekilde artırıldı.")
+            return True
+    except pymysql.MySQLError as e:
+        st.error(f"⚠️ Borç artırılırken hata oluştu: {e}")
+        return False
+    finally:
+        connection.close()
